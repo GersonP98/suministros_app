@@ -1,45 +1,93 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
+import os
 
-st.set_page_config(page_title="SIGEPER", layout="wide")
+# ======================
+# CONFIGURACIÓN
+# ======================
+st.set_page_config(page_title="Consumo A4351", layout="wide")
 
-st.title("SIGEPER - Sistema de Gestión y Evaluación de Pérdidas Eléctricas")
-st.subheader("Analizador de caída de consumos A4351")
+st.title("⚡ Análisis de Consumo A4351 - 2 Años")
 
-archivo = st.file_uploader("Cargar Excel de consumos", type="xlsx")
+# ======================
+# CARGA DE ARCHIVO
+# ======================
+file_path = os.path.join(os.path.dirname(__file__), "CONSUMO A4351 2 AÑOS.xlsx")
 
-if archivo:
-    df = pd.read_excel(archivo)
-    st.dataframe(df.head())
+df = pd.read_excel(file_path)
 
-    meses = [c for c in df.columns if "-" in str(c)]
+# ======================
+# VER COLUMNAS (MUY IMPORTANTE)
+# ======================
+st.subheader("📌 Columnas detectadas en tu Excel")
+st.write(df.columns)
 
-    if len(meses) >= 12:
-        ultimo = meses[-1]
-        historico = meses[-13:-1]
+st.divider()
 
-        df["PROM_12_MESES"] = df[historico].mean(axis=1)
-        df["CAIDA_%"] = ((df["PROM_12_MESES"]-df[ultimo]) / df["PROM_12_MESES"])*100
+# ======================
+# FILTROS AUTOMÁTICOS (GENÉRICOS)
+# ======================
+st.subheader("🔎 Filtros")
 
-        df["DIAGNOSTICO"] = "NORMAL"
-        df.loc[df["CAIDA_%"]>=40,"DIAGNOSTICO"]="RIESGO"
-        df.loc[df["CAIDA_%"]>=70,"DIAGNOSTICO"]="CRITICO"
+col1, col2 = st.columns(2)
 
-        st.metric("Suministros analizados", len(df))
-        st.metric("Casos críticos", len(df[df["DIAGNOSTICO"]=="CRITICO"]))
+with col1:
+    columnas_texto = df.select_dtypes(include="object").columns.tolist()
+    filtro_col1 = st.selectbox("Selecciona columna filtro 1", columnas_texto)
 
-        columnas=[x for x in ["SUMINISTRO","SED","PROM_12_MESES",ultimo,"CAIDA_%","DIAGNOSTICO"] if x in df.columns]
+    valores1 = st.multiselect(
+        "Valores",
+        df[filtro_col1].dropna().unique()
+    )
 
-        resultado=df[columnas].sort_values("CAIDA_%",ascending=False)
+with col2:
+    filtro_col2 = st.selectbox("Selecciona columna filtro 2", columnas_texto)
 
-        st.subheader("Ranking crítico")
-        st.dataframe(resultado.head(50))
+    valores2 = st.multiselect(
+        "Valores ",
+        df[filtro_col2].dropna().unique()
+    )
 
-        st.subheader("Gráfico de barras")
-        if "SUMINISTRO" in resultado.columns:
-            st.bar_chart(resultado.head(10).set_index("SUMINISTRO")["CAIDA_%"])
+df_filtrado = df.copy()
 
-        st.subheader("Diagnóstico")
-        st.write("Los suministros con caída elevada deben pasar a validación técnica y comercial.")
-    else:
-        st.warning("Se requieren 12 meses históricos.")
+if valores1:
+    df_filtrado = df_filtrado[df_filtrado[filtro_col1].isin(valores1)]
+
+if valores2:
+    df_filtrado = df_filtrado[df_filtrado[filtro_col2].isin(valores2)]
+
+st.divider()
+
+# ======================
+# TABLA
+# ======================
+st.subheader("📋 Datos")
+
+st.dataframe(df_filtrado, use_container_width=True)
+
+st.divider()
+
+# ======================
+# GRÁFICO AUTOMÁTICO
+# ======================
+st.subheader("📊 Gráfico de análisis")
+
+columnas_numericas = df.select_dtypes(include="number").columns.tolist()
+
+if len(columnas_numericas) > 0:
+    y_col = st.selectbox("Selecciona variable numérica", columnas_numericas)
+
+    x_col = st.selectbox("Selecciona categoría", columnas_texto)
+
+    chart = alt.Chart(df_filtrado).mark_bar().encode(
+        x=alt.X(f"{x_col}:N", sort="-y"),
+        y=f"{y_col}:Q",
+        color=alt.Color(f"{y_col}:Q", scale=alt.Scale(scheme="blues")),
+        tooltip=[x_col, y_col]
+    ).properties(height=400)
+
+    st.altair_chart(chart, use_container_width=True)
+
+else:
+    st.warning("No se detectaron columnas numéricas para graficar")
