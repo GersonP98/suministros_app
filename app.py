@@ -1,3 +1,8 @@
+# =========================================================
+# DASHBOARD CONTROL DE PÉRDIDAS A4351
+# PARTE 1/2
+# =========================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,9 +10,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 
-# ==========================================
-# CONFIGURACIÓN GENERAL
-# ==========================================
+# =========================================================
+# CONFIGURACIÓN
+# =========================================================
 
 st.set_page_config(
     page_title="Control de Pérdidas A4351",
@@ -15,16 +20,67 @@ st.set_page_config(
 )
 
 
-# ==========================================
-# CARGA DATA
-# ==========================================
+# =========================================================
+# ESTILO PROFESIONAL
+# =========================================================
+
+st.markdown(
+"""
+<style>
+
+.stApp {
+
+background-color: #F5F7FA;
+
+}
+
+
+h1, h2, h3 {
+
+color:#0B1F33;
+
+}
+
+
+[data-testid="metric-container"] {
+
+background-color:white;
+
+padding:15px;
+
+border-radius:12px;
+
+box-shadow:0px 2px 8px #cccccc;
+
+}
+
+
+div[data-testid="stDataFrame"] {
+
+background:white;
+
+}
+
+
+</style>
+""",
+unsafe_allow_html=True
+)
+
+
+
+# =========================================================
+# CARGA DE DATA
+# =========================================================
 
 archivo = "CONSUMO A4351 2 AÑOS.xlsx"
+
 
 df = pd.read_excel(archivo)
 
 
-# limpiar columnas
+
+# limpieza columnas
 
 df.columns = (
     df.columns
@@ -33,26 +89,26 @@ df.columns = (
 )
 
 
-# primera columna suministro
 
 col_suministro = df.columns[0]
 
 
-# meses
-
 meses = df.columns[1:]
+
 
 
 # convertir consumos
 
 for m in meses:
+
     df[m] = pd.to_numeric(
         df[m],
         errors="coerce"
     )
 
 
-# eliminar filas sin suministro
+
+# eliminar registros vacíos
 
 df = df.dropna(
     subset=[col_suministro]
@@ -60,9 +116,10 @@ df = df.dropna(
 
 
 
-# ==========================================
+# =========================================================
 # ÚLTIMOS 12 MESES
-# ==========================================
+# =========================================================
+
 
 meses_12 = list(meses[-12:])
 
@@ -73,53 +130,97 @@ df["Promedio_12M"] = (
 )
 
 
-# último y anterior mes
 
-df["Mes_Actual"] = df[meses_12[-1]]
-
-df["Mes_Anterior"] = df[meses_12[-2]]
-
+df["Ultimo_Mes"] = (
+    df[meses_12[-1]]
+)
 
 
-# ==========================================
+
+df["Mes_Anterior"] = (
+    df[meses_12[-2]]
+)
+
+
+
+# =========================================================
 # VARIACIÓN %
-# ==========================================
+# =========================================================
 
-df["Diferencia"] = (
-    df["Mes_Actual"]
+
+df["Diferencia_kWh"] = (
+
+    df["Ultimo_Mes"]
     -
     df["Mes_Anterior"]
+
 )
+
 
 
 df["Variacion_%"] = (
+
     abs(
-        df["Diferencia"]
+
+        df["Diferencia_kWh"]
+
         /
-        df["Mes_Anterior"].replace(0,np.nan)
+
+        df["Mes_Anterior"]
+        .replace(0,np.nan)
+
     )
-    *
-    100
+
+    *100
+
 )
 
 
-
-# dirección del cambio
 
 df["Tipo_Cambio"] = np.where(
-    df["Diferencia"] < 0,
-    "Caída de consumo",
-    "Incremento de consumo"
+
+    df["Diferencia_kWh"] < 0,
+
+    "Caída",
+
+    "Incremento"
+
 )
 
 
 
-# ==========================================
-# CONSUMO CERO Y ALERTAS
-# ==========================================
+# =========================================================
+# ENERGÍA PERDIDA
+# COMPARACIÓN CONTRA PROMEDIO 12 MESES
+# =========================================================
 
 
-def estado_consumo(row):
+df["Energia_Esperada"] = (
+    df["Promedio_12M"]
+)
+
+
+
+df["Energia_Perdida_kWh"] = np.where(
+
+    df["Ultimo_Mes"] < df["Promedio_12M"],
+
+    df["Promedio_12M"]
+    -
+    df["Ultimo_Mes"],
+
+    0
+
+)
+
+
+
+# =========================================================
+# CLASIFICACIÓN
+# =========================================================
+
+
+def clasificar(row):
 
 
     consumo12 = row[meses_12].sum()
@@ -128,14 +229,6 @@ def estado_consumo(row):
     consumo6 = row[meses_12[-6:]].sum()
 
 
-    variacion = row["Variacion_%"]
-
-
-    diferencia = row["Diferencia"]
-
-
-
-    # cero últimos 12 meses
 
     if consumo12 == 0:
 
@@ -143,33 +236,34 @@ def estado_consumo(row):
 
 
 
-    # cero últimos 6 meses
-
     elif consumo6 == 0:
 
         return "🟣 Aviso Consumo 6 meses"
 
 
 
-    # caída crítica
-
-    elif diferencia < 0 and variacion > 40:
+    elif (
+        row["Tipo_Cambio"]=="Caída"
+        and row["Variacion_%"]>40
+    ):
 
         return "🔴 Caída Crítica"
 
 
 
-    # caída moderada
-
-    elif diferencia < 0 and variacion > 20:
+    elif (
+        row["Tipo_Cambio"]=="Caída"
+        and row["Variacion_%"]>20
+    ):
 
         return "🟠 Caída Consumo"
 
 
 
-    # incremento alto
-
-    elif diferencia > 0 and variacion > 50:
+    elif (
+        row["Tipo_Cambio"]=="Incremento"
+        and row["Variacion_%"]>50
+    ):
 
         return "🔵 Incremento Alto"
 
@@ -182,210 +276,377 @@ def estado_consumo(row):
 
 
 df["Estado"] = df.apply(
-    estado_consumo,
+    clasificar,
     axis=1
 )
 
 
 
-# ==========================================
-# COLORES
-# ==========================================
+# =========================================================
+# FUNCIONES DE UNIDADES
+# =========================================================
 
 
-colores_estado = {
-
-"⚫ Consumo Cero 12 meses":"black",
-
-"🟣 Aviso Consumo 6 meses":"purple",
-
-"🔴 Caída Crítica":"red",
-
-"🟠 Caída Consumo":"orange",
-
-"🔵 Incremento Alto":"blue",
-
-"🟢 Consumo Normal":"green"
-
-}
+def formato_energia(valor):
 
 
+    if valor >= 1000000:
 
-# ==========================================
+        return (
+            f"{valor/1000000:.2f} GWh"
+        )
+
+    else:
+
+        return (
+            f"{valor:,.0f} kWh"
+        )
+
+
+
+# =========================================================
 # TÍTULO
-# ==========================================
+# =========================================================
 
 
 st.title(
-    "⚡ Sistema Inteligente de Control de Pérdidas - Alimentador A4351"
+"⚡ Sistema de Control de Pérdidas - Alimentador A4351"
 )
 
 
-st.success(
-    "Análisis basado en últimos 12 meses de consumo"
-)
-# ==========================================
-# FONDO CONTROL DE PÉRDIDAS
-# ==========================================
-
-st.markdown(
-"""
-<style>
-
-[data-testid="stAppViewContainer"] {
-
-background-image:
-linear-gradient(
-rgba(255,255,255,0.92),
-rgba(255,255,255,0.92)
-),
-url("https://images.unsplash.com/photo-1473341304170-971dccb5ac1e");
-
-background-size: cover;
-
-}
-
-</style>
-""",
-unsafe_allow_html=True
+st.caption(
+"Análisis automático de consumos, pérdidas energéticas y anomalías de suministro - Últimos 12 meses"
 )
 
 
 
-# ==========================================
+# =========================================================
 # KPI GERENCIALES
-# ==========================================
-
-st.subheader("📊 Indicadores de Control de Pérdidas")
+# =========================================================
 
 
-k1,k2,k3,k4,k5 = st.columns(5)
-
-
-k1.metric(
-    "Total Suministros",
-    len(df)
-)
-
-
-k2.metric(
-    "🔴 Caídas Críticas",
-    len(
-        df[
-        df["Estado"]=="🔴 Caída Crítica"
-        ]
-    )
-)
-
-
-k3.metric(
-    "⚫ Consumo Cero 12M",
-    len(
-        df[
-        df["Estado"]=="⚫ Consumo Cero 12 meses"
-        ]
-    )
-)
-
-
-k4.metric(
-    "🟣 Aviso 6 meses",
-    len(
-        df[
-        df["Estado"]=="🟣 Aviso Consumo 6 meses"
-        ]
-    )
-)
-
-
-k5.metric(
-    "🔵 Incrementos >50%",
-    len(
-        df[
-        df["Estado"]=="🔵 Incremento Alto"
-        ]
-    )
+energia_perdida_total = (
+    df["Energia_Perdida_kWh"]
+    .sum()
 )
 
 
 
-# ==========================================
-# TABLA ALERTAS
-# ==========================================
+caidas = len(
+    df[
+    df["Estado"]=="🔴 Caída Crítica"
+    ]
+)
 
+
+
+cero = len(
+    df[
+    df["Estado"]=="⚫ Consumo Cero 12 meses"
+    ]
+)
+
+
+
+avisos = len(
+    df[
+    df["Estado"]=="🟣 Aviso Consumo 6 meses"
+    ]
+)
+
+
+
+consumo_total_actual = (
+    df["Ultimo_Mes"]
+    .sum()
+)
+
+
+
+a,b,c,d,e = st.columns(5)
+
+
+a.metric(
+"📌 Suministros",
+len(df)
+)
+
+
+b.metric(
+"🔴 Caídas críticas",
+caidas
+)
+
+
+c.metric(
+"⚫ Consumo cero",
+cero
+)
+
+
+d.metric(
+"🟣 Inspección",
+avisos
+)
+
+
+e.metric(
+"⚡ Energía perdida",
+formato_energia(
+energia_perdida_total
+)
+)
+# =========================================================
+# TENDENCIA ALIMENTADOR A4351
+# SUMA TOTAL DE TODOS LOS SUMINISTROS
+# =========================================================
 
 st.subheader(
-"🚨 Suministros Observados"
+"📈 Tendencia Global del Alimentador A4351"
 )
 
 
-alertas = df[
-df["Estado"]!="🟢 Consumo Normal"
+tendencia = pd.DataFrame()
+
+
+tendencia["Mes"] = meses_12
+
+
+# suma de todos los suministros por mes
+
+tendencia["Consumo_kWh"] = [
+
+    df[m].sum()
+
+    for m in meses_12
+
 ]
+
+
+
+# conversión unidad
+
+def convertir_unidad(valor):
+
+    if valor >= 1000000:
+
+        return f"{valor/1000000:.2f} GWh"
+
+    else:
+
+        return f"{valor:,.0f} kWh"
+
+
+
+tendencia["Unidad"] = tendencia["Consumo_kWh"].apply(
+    convertir_unidad
+)
+
+
+
+# cálculo variación mensual
+
+tendencia["Variacion_%"] = (
+
+    tendencia["Consumo_kWh"]
+    .pct_change()
+    .abs()
+    *
+    100
+
+)
+
+
+
+tendencia["Tipo"] = np.where(
+
+    tendencia["Consumo_kWh"]
+    <
+    tendencia["Consumo_kWh"].shift(1),
+
+    "Caída",
+
+    "Incremento"
+
+)
+
 
 
 st.dataframe(
-alertas[
-[
-col_suministro,
-"Mes_Anterior",
-"Mes_Actual",
-"Variacion_%",
-"Tipo_Cambio",
-"Estado"
-]
-],
+    tendencia,
+    use_container_width=True
+)
+
+
+
+# =========================================================
+# GRÁFICO DISPERSIÓN ALIMENTADOR
+# =========================================================
+
+
+fig_tendencia = go.Figure()
+
+
+
+fig_tendencia.add_trace(
+
+    go.Scatter(
+
+        x=tendencia["Mes"],
+
+        y=tendencia["Consumo_kWh"],
+
+        mode="lines+markers",
+
+        name="Consumo A4351",
+
+        marker=dict(
+            size=10
+        )
+
+    )
+
+)
+
+
+
+fig_tendencia.update_layout(
+
+    title="Consumo mensual acumulado del Alimentador A4351",
+
+    xaxis_title="Mes",
+
+    yaxis_title="Consumo",
+
+    height=500
+
+)
+
+
+
+st.plotly_chart(
+    fig_tendencia,
+    use_container_width=True
+)
+
+
+
+
+# =========================================================
+# VARIACIÓN MENSUAL %
+# =========================================================
+
+
+st.subheader(
+"📉 Variación mensual del Alimentador"
+)
+
+
+
+fig_var = px.bar(
+
+    tendencia,
+
+    x="Mes",
+
+    y="Variacion_%",
+
+    color="Tipo",
+
+    title="Variación porcentual mensual"
+
+)
+
+
+fig_var.update_layout(
+height=400
+)
+
+
+st.plotly_chart(
+fig_var,
 use_container_width=True
 )
 
 
 
 
-# ==========================================
-# TOP 100 CRÍTICOS
-# ==========================================
+
+# =========================================================
+# TOP 100 SUMINISTROS CRÍTICOS
+# =========================================================
 
 
 st.subheader(
-"🔴 Top 100 Suministros con Mayor Variación"
+"🔴 Top 100 Suministros con Mayor Impacto"
 )
+
 
 
 top100 = (
+
 df
+
 .sort_values(
-"Variacion_%",
+
+"Energia_Perdida_kWh",
+
 ascending=False
+
 )
+
 .head(100)
+
 )
+
 
 
 st.dataframe(
+
 top100[
+
 [
+
 col_suministro,
+
+"Ultimo_Mes",
+
+"Promedio_12M",
+
+"Energia_Perdida_kWh",
+
 "Variacion_%",
-"Tipo_Cambio",
+
 "Estado"
+
 ]
+
 ],
+
 use_container_width=True
+
 )
 
 
 
-# gráfico top 20 visual
+# gráfico top 20
 
 top20 = top100.head(20)
 
 
+
 fig_top = px.bar(
+
 top20,
+
 x=col_suministro,
-y="Variacion_%",
+
+y="Energia_Perdida_kWh",
+
 color="Estado",
-title="Top 20 Variaciones de Consumo"
+
+title="Top 20 suministros con mayor energía dejada de consumir"
+
 )
 
 
@@ -394,130 +655,59 @@ height=500
 )
 
 
+
 st.plotly_chart(
+
 fig_top,
+
 use_container_width=True
+
 )
 
 
 
 
-# ==========================================
-# TENDENCIA ALIMENTADOR A4351
-# SUMA TOTAL MENSUAL
-# ==========================================
+# =========================================================
+# PARETO DE PÉRDIDAS
+# =========================================================
 
 
 st.subheader(
-"📈 Tendencia Global del Alimentador A4351"
+"📊 Pareto 80/20 de Energía Perdida"
 )
 
-
-consumo_alimentador = pd.DataFrame()
-
-
-consumo_alimentador["Mes"] = meses_12
-
-
-consumo_alimentador["Consumo_Total"] = [
-df[m].sum()
-for m in meses_12
-]
-
-
-
-# cálculo variación mensual
-
-consumo_alimentador["Variacion_%"] = (
-consumo_alimentador["Consumo_Total"]
-.diff()
-/
-consumo_alimentador["Consumo_Total"].shift(1)
-*
-100
-)
-
-
-
-consumo_alimentador["Variacion_%"] = (
-consumo_alimentador["Variacion_%"]
-.abs()
-)
-
-
-
-st.dataframe(
-consumo_alimentador,
-use_container_width=True
-)
-
-
-
-# gráfico dispersión
-
-
-fig_tendencia = go.Figure()
-
-
-fig_tendencia.add_trace(
-go.Scatter(
-x=consumo_alimentador["Mes"],
-y=consumo_alimentador["Consumo_Total"],
-mode="lines+markers",
-name="Consumo Alimentador"
-)
-)
-
-
-
-fig_tendencia.update_layout(
-
-title="Consumo mensual acumulado A4351",
-
-xaxis_title="Mes",
-
-yaxis_title="kWh",
-
-height=500
-
-)
-
-
-st.plotly_chart(
-fig_tendencia,
-use_container_width=True
-)
-
-
-
-
-# ==========================================
-# PARETO 80/20
-# ==========================================
-
-
-st.subheader(
-"📊 Pareto de Variaciones"
-)
 
 
 pareto = (
+
 df
+
 .sort_values(
-"Variacion_%",
+
+"Energia_Perdida_kWh",
+
 ascending=False
+
 )
+
 )
 
 
-pareto["Acumulado_%"] = (
-pareto["Variacion_%"]
+
+pareto["Acumulado_%"]=(
+
+pareto["Energia_Perdida_kWh"]
 .cumsum()
+
 /
-pareto["Variacion_%"]
+
+pareto["Energia_Perdida_kWh"]
 .sum()
+
 *
+
 100
+
 )
 
 
@@ -525,42 +715,65 @@ pareto["Variacion_%"]
 fig_pareto = go.Figure()
 
 
+
 fig_pareto.add_trace(
+
 go.Bar(
-x=pareto.head(30)[col_suministro],
-y=pareto.head(30)["Variacion_%"],
-name="Variación"
+
+x=pareto.head(50)[col_suministro],
+
+y=pareto.head(50)["Energia_Perdida_kWh"],
+
+name="kWh perdido"
+
 )
+
 )
+
 
 
 fig_pareto.add_trace(
+
 go.Scatter(
-x=pareto.head(30)[col_suministro],
-y=pareto.head(30)["Acumulado_%"],
+
+x=pareto.head(50)[col_suministro],
+
+y=pareto.head(50)["Acumulado_%"],
+
 mode="lines+markers",
+
 name="Acumulado %"
+
 )
+
 )
+
 
 
 fig_pareto.update_layout(
-title="Pareto primeros 30 suministros",
+
+title="Pareto principales pérdidas",
+
 height=500
+
 )
+
 
 
 st.plotly_chart(
+
 fig_pareto,
+
 use_container_width=True
+
 )
 
 
 
 
-# ==========================================
-# ANALISIS INDIVIDUAL
-# ==========================================
+# =========================================================
+# ANÁLISIS INDIVIDUAL
+# =========================================================
 
 
 st.subheader(
@@ -568,62 +781,115 @@ st.subheader(
 )
 
 
-seleccion = st.selectbox(
+
+suministro = st.selectbox(
+
 "Seleccione suministro",
+
 df[col_suministro].astype(str)
+
 )
 
 
+
 dato = df[
+
 df[col_suministro].astype(str)
+
 ==
-seleccion
+
+suministro
+
 ].iloc[0]
 
 
 
-meses_graf = meses_12
+grafico12 = pd.DataFrame({
 
+"Mes":meses_12,
 
-valores = [
+"Consumo":[
+
 dato[m]
-for m in meses_graf
+
+for m in meses_12
+
 ]
 
+})
 
 
-fig_ind = go.Figure()
+
+fig_individual = go.Figure()
 
 
-fig_ind.add_trace(
+
+fig_individual.add_trace(
+
 go.Bar(
-x=meses_graf,
-y=valores,
+
+x=grafico12["Mes"],
+
+y=grafico12["Consumo"],
+
 name="Consumo mensual"
+
 )
+
 )
 
 
 
-fig_ind.add_trace(
+fig_individual.add_trace(
+
 go.Scatter(
-x=meses_graf,
+
+x=grafico12["Mes"],
+
 y=[dato["Promedio_12M"]]*12,
+
 mode="lines",
+
 name="Promedio 12 meses"
+
 )
+
 )
 
 
 
-fig_ind.update_layout(
-title=f"Tendencia suministro {seleccion}",
+fig_individual.update_layout(
+
+title=f"Tendencia suministro {suministro}",
+
 height=500
+
 )
 
 
 
 st.plotly_chart(
-fig_ind,
+
+fig_individual,
+
 use_container_width=True
+
+)
+
+
+
+# =========================================================
+# EXPORTACIÓN
+# =========================================================
+
+
+st.subheader(
+"📤 Exportar análisis"
+)
+
+
+
+excel = df.to_excel(
+index=False,
+engine="openpyxl"
 )
