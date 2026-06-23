@@ -5,30 +5,32 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Análisis de Consumos A4351", layout="wide")
 
-st.title("⚡ Análisis de Consumo – Alimentador A4351")
+st.title("⚡ Dashboard de Consumo – Alimentador A4351")
 
 # =========================
-# 📂 CARGA DE ARCHIVO
+# 📂 CARGA EXCEL (ROBUSTO)
 # =========================
 file_path = "CONSUMO A4351 2 AÑOS.xlsx"
+
 df = pd.read_excel(file_path)
 
-# =========================
-# 🧹 LIMPIEZA BÁSICA
-# =========================
-df.columns = df.columns.str.strip()
+# Limpieza de columnas
+df.columns = df.columns.astype(str).str.strip()
 
-# Suponemos formato típico:
-# Columna 0 = Suministro
-# resto = meses
-
+# =========================
+# 🔎 IDENTIFICACIÓN COLUMNAS
+# =========================
 suministro_col = df.columns[0]
 meses = df.columns[1:]
 
-df[meses] = df[meses].apply(pd.to_numeric, errors="coerce")
+# =========================
+# 🧹 CONVERSIÓN SEGURA
+# =========================
+for col in meses:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # =========================
-# 📉 CÁLCULO VARIACIÓN
+# 📉 VARIABLES BASE
 # =========================
 df["Ultimo_Mes"] = df[meses[-1]]
 df["Mes_Anterior"] = df[meses[-2]]
@@ -42,7 +44,7 @@ df["Variacion_%"] = (
 # 🚨 CLASIFICACIÓN
 # =========================
 def clasificar(row):
-    if row["Ultimo_Mes"] == 0:
+    if pd.isna(row["Ultimo_Mes"]) or row["Ultimo_Mes"] == 0:
         return "Consumo Cero"
     elif row["Variacion_%"] <= -40:
         return "Caída Crítica"
@@ -56,7 +58,7 @@ df["Estado"] = df.apply(clasificar, axis=1)
 # =========================
 # 🎨 COLORES
 # =========================
-colores = {
+color_map = {
     "Consumo Cero": "black",
     "Caída Crítica": "red",
     "Caída de Consumo": "orange",
@@ -64,9 +66,9 @@ colores = {
 }
 
 # =========================
-# 📋 TABLA DE ALERTAS
+# 📋 ALERTAS
 # =========================
-st.subheader("📋 Lista de Suministros con Alertas")
+st.subheader("📋 Suministros con Alertas")
 
 alertas = df[df["Estado"] != "Normal"][
     [suministro_col, "Ultimo_Mes", "Variacion_%", "Estado"]
@@ -75,40 +77,42 @@ alertas = df[df["Estado"] != "Normal"][
 st.dataframe(alertas, use_container_width=True)
 
 # =========================
-# 🔍 SELECTOR DE SUMINISTRO
+# 🔍 SELECTOR SUMINISTRO
 # =========================
 st.subheader("📊 Análisis por Suministro")
 
 suministro_sel = st.selectbox(
-    "Selecciona un suministro",
-    df[suministro_col]
+    "Selecciona suministro",
+    df[suministro_col].astype(str)
 )
 
-fila = df[df[suministro_col] == suministro_sel].iloc[0]
+fila = df[df[suministro_col].astype(str) == suministro_sel].iloc[0]
 
 # =========================
-# 📊 GRÁFICO DE BARRAS
+# 📊 GRÁFICO
 # =========================
 fig = go.Figure()
 
-colores_barras = []
+colores = []
 for v in fila[meses]:
-    if v == 0:
-        colores_barras.append("black")
+    if pd.isna(v):
+        colores.append("gray")
+    elif v == 0:
+        colores.append("black")
     elif v < fila["Ultimo_Mes"] * 0.6:
-        colores_barras.append("red")
+        colores.append("red")
     else:
-        colores_barras.append("steelblue")
+        colores.append("steelblue")
 
 fig.add_trace(go.Bar(
     x=meses,
     y=fila[meses],
-    marker_color=colores_barras
+    marker_color=colores
 ))
 
 fig.update_layout(
     title=f"Consumo histórico – {suministro_sel}",
-    xaxis_title="Mes",
+    xaxis_title="Meses",
     yaxis_title="Consumo",
     height=500
 )
@@ -120,18 +124,27 @@ st.plotly_chart(fig, use_container_width=True)
 # =========================
 st.subheader("📌 Resumen Gerencial")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("🔴 Críticos", len(df[df["Estado"] == "Caída Crítica"]))
 col2.metric("⚠️ Caídas", len(df[df["Estado"] == "Caída de Consumo"]))
-col3.metric("⛔ Consumo Cero", len(df[df["Estado"] == "Consumo Cero"]))
+col3.metric("⛔ Cero", len(df[df["Estado"] == "Consumo Cero"]))
+col4.metric("📊 Total Suministros", len(df))
 
 # =========================
-# 📉 LISTA DETALLADA CAÍDAS
+# 📉 LISTA CAÍDAS
 # =========================
-st.subheader("📉 Caídas de Consumo (1% - 100%)")
+st.subheader("📉 Ranking de Caídas")
 
 caidas = df[df["Variacion_%"] < 0].copy()
 caidas = caidas.sort_values("Variacion_%")
 
-st.dataframe(caidas[[suministro_col, "Variacion_%", "Estado"]])
+st.dataframe(
+    caidas[[suministro_col, "Variacion_%", "Estado"]],
+    use_container_width=True
+)
+
+# =========================
+# 📌 MENSAJE GERENCIAL
+# =========================
+st.info("🔎 Los valores en rojo indican caídas críticas (>40%). Negro indica consumo cero.")
