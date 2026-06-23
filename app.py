@@ -13,7 +13,6 @@ st.title("⚡ Análisis Gerencial de Consumo – A4351")
 file_path = "CONSUMO A4351 2 AÑOS.xlsx"
 df = pd.read_excel(file_path)
 
-# limpieza de columnas
 df.columns = df.columns.astype(str).str.strip()
 
 suministro_col = df.columns[0]
@@ -24,18 +23,16 @@ for col in meses:
     df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # =========================
-# 📉 SOLO ÚLTIMOS 2 MESES
+# 📊 SOLO ÚLTIMOS 2 MESES (VARIACIÓN)
 # =========================
 df["Mes_Anterior"] = df[meses[-2]]
 df["Ultimo_Mes"] = df[meses[-1]]
 
-# variación %
 df["Variacion_%"] = (
     (df["Ultimo_Mes"] - df["Mes_Anterior"]) /
     df["Mes_Anterior"].replace(0, np.nan)
 ) * 100
 
-# porcentaje absoluto (sin signo)
 df["Variacion_%"] = df["Variacion_%"].abs()
 
 # =========================
@@ -60,18 +57,14 @@ def clasificar(row):
 df["Estado"] = df.apply(clasificar, axis=1)
 
 # =========================
-# 🎨 COLORES
+# 📊 🔥 NUEVO: ÚLTIMOS 6 MESES + PROMEDIO
 # =========================
-color_map = {
-    "Consumo Cero": "black",
-    "Consumo Normal": "green",
-    "Variación Moderada": "orange",
-    "Caída Crítica": "red",
-    "Incremento Alto": "blue"
-}
+ultimos_6 = meses[-6:]
+
+df["Promedio_6M"] = df[ultimos_6].mean(axis=1)
 
 # =========================
-# 📊 RESUMEN GERENCIAL
+# 📌 RESUMEN GERENCIAL
 # =========================
 st.subheader("📌 Resumen Gerencial")
 
@@ -80,22 +73,20 @@ col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("⚫ Cero", len(df[df["Estado"] == "Consumo Cero"]))
 col2.metric("🟢 Normal", len(df[df["Estado"] == "Consumo Normal"]))
 col3.metric("🟡 Moderado", len(df[df["Estado"] == "Variación Moderada"]))
-col4.metric("🔴 Caída Crítica", len(df[df["Estado"] == "Caída Crítica"]))
-col5.metric("🔵 Incremento Alto", len(df[df["Estado"] == "Incremento Alto"]))
+col4.metric("🔴 Crítico", len(df[df["Estado"] == "Caída Crítica"]))
+col5.metric("🔵 Alto", len(df[df["Estado"] == "Incremento Alto"]))
 
 # =========================
-# 📋 TABLA DE ALERTAS
+# 📋 TABLA GERENCIAL (CON PROMEDIO)
 # =========================
-st.subheader("📋 Alertas de Consumo")
+st.subheader("📋 Tabla de Consumos (Últimos 6 meses)")
 
-alertas = df[df["Estado"] != "Consumo Normal"][
-    [suministro_col, "Mes_Anterior", "Ultimo_Mes", "Variacion_%", "Estado"]
-]
+tabla = df[[suministro_col] + list(ultimos_6) + ["Promedio_6M", "Estado"]]
 
-st.dataframe(alertas, use_container_width=True)
+st.dataframe(tabla, use_container_width=True)
 
 # =========================
-# 🔍 SELECCIÓN
+# 🔍 SELECCIÓN SUMINISTRO
 # =========================
 st.subheader("📊 Análisis por Suministro")
 
@@ -107,14 +98,12 @@ suministro_sel = st.selectbox(
 fila = df[df[suministro_col].astype(str) == suministro_sel].iloc[0]
 
 # =========================
-# 📊 GRÁFICO ÚLTIMOS MESES
+# 📊 GRÁFICO ÚLTIMOS 6 MESES + PROMEDIO
 # =========================
-ultimos_meses = list(meses[-12:])
-
 values = []
 colors = []
 
-for col in ultimos_meses:
+for col in ultimos_6:
     v = pd.to_numeric(fila[col], errors="coerce")
     values.append(v)
 
@@ -122,7 +111,7 @@ for col in ultimos_meses:
         colors.append("gray")
     elif v == 0:
         colors.append("black")
-    elif v < np.nanmean(values) * 0.6:
+    elif v < fila["Promedio_6M"] * 0.8:
         colors.append("red")
     else:
         colors.append("steelblue")
@@ -130,13 +119,23 @@ for col in ultimos_meses:
 fig = go.Figure()
 
 fig.add_trace(go.Bar(
-    x=ultimos_meses,
+    x=ultimos_6,
     y=values,
-    marker_color=colors
+    marker_color=colors,
+    name="Consumo mensual"
+))
+
+# línea de promedio
+fig.add_trace(go.Scatter(
+    x=ultimos_6,
+    y=[fila["Promedio_6M"]] * len(ultimos_6),
+    mode="lines",
+    name="Promedio 6M",
+    line=dict(color="green", width=3)
 ))
 
 fig.update_layout(
-    title=f"Consumo histórico últimos meses – {suministro_sel}",
+    title=f"Consumo últimos 6 meses – {suministro_sel}",
     xaxis_title="Meses",
     yaxis_title="Consumo",
     height=500
@@ -152,11 +151,11 @@ st.subheader("📉 Ranking de Variación")
 ranking = df.sort_values("Variacion_%", ascending=False)
 
 st.dataframe(
-    ranking[[suministro_col, "Mes_Anterior", "Ultimo_Mes", "Variacion_%", "Estado"]],
+    ranking[[suministro_col, "Mes_Anterior", "Ultimo_Mes", "Variacion_%", "Promedio_6M", "Estado"]],
     use_container_width=True
 )
 
 # =========================
 # 📌 NOTA
 # =========================
-st.info("🟢 Normal: ≤20% | 🟡 Moderado: 20–50% | 🔴 Crítico: caída >40% | 🔵 Incremento alto: >50%")
+st.info("📊 Se muestran los últimos 6 meses + promedio como referencia gerencial.")
