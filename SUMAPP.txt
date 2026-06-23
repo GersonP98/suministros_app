@@ -1,0 +1,88 @@
+import streamlit as st
+import pandas as pd
+import altair as alt
+
+st.set_page_config(page_title="Suministros Críticos", layout="wide")
+
+st.title("📦 Registro de Suministros Críticos")
+
+# ======================
+# CARGA DE DATOS
+# ======================
+df = pd.read_excel("suministros.xlsx")
+
+# ======================
+# KPI
+# ======================
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Total suministros", len(df))
+col2.metric("Críticos (>=8)", len(df[df["Criticidad"] >= 8]))
+col3.metric("Ubicaciones", df["Ubicación"].nunique())
+
+st.divider()
+
+# ======================
+# FILTROS
+# ======================
+st.subheader("🔎 Filtros")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    filtro_suministro = st.multiselect(
+        "Suministro",
+        df["Suministro"].unique()
+    )
+
+with col2:
+    filtro_ubicacion = st.multiselect(
+        "Ubicación",
+        df["Ubicación"].unique()
+    )
+
+df_filtrado = df.copy()
+
+if filtro_suministro:
+    df_filtrado = df_filtrado[df_filtrado["Suministro"].isin(filtro_suministro)]
+
+if filtro_ubicacion:
+    df_filtrado = df_filtrado[df_filtrado["Ubicación"].isin(filtro_ubicacion)]
+
+df_filtrado = df_filtrado.sort_values("Criticidad", ascending=False)
+
+st.divider()
+
+# ======================
+# TABLA CON COLORES
+# ======================
+st.subheader("📋 Registro")
+
+def color_criticidad(val):
+    if val >= 8:
+        return "background-color: red; color: white"
+    elif val >= 5:
+        return "background-color: orange; color: black"
+    else:
+        return "background-color: green; color: white"
+
+st.dataframe(
+    df_filtrado.style.applymap(color_criticidad, subset=["Criticidad"]),
+    use_container_width=True
+)
+
+st.divider()
+
+# ======================
+# GRÁFICO
+# ======================
+st.subheader("📊 Ranking de Criticidad")
+
+chart = alt.Chart(df_filtrado).mark_bar().encode(
+    x=alt.X("Suministro:N", sort="-y"),
+    y="Criticidad:Q",
+    color=alt.Color("Criticidad:Q", scale=alt.Scale(scheme="reds")),
+    tooltip=["Suministro", "Ubicación", "Criticidad"]
+).properties(height=400)
+
+st.altair_chart(chart, use_container_width=True)
