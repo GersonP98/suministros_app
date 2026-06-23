@@ -1,86 +1,97 @@
-# =========================================================
-# DASHBOARD CONTROL DE PÉRDIDAS A4351
-# PARTE 1/2
-# =========================================================
+# =====================================================
+# DASHBOARD CONTROL DE PERDIDAS A4351
+# VERSION GERENCIAL 12 MESES
+# =====================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+from io import BytesIO
 
 
-# =========================================================
-# CONFIGURACIÓN
-# =========================================================
+# =====================================================
+# CONFIGURACION
+# =====================================================
 
 st.set_page_config(
-    page_title="Control de Pérdidas A4351",
+    page_title="Control de Perdidas A4351",
     layout="wide"
 )
 
 
-# =========================================================
-# ESTILO PROFESIONAL
-# =========================================================
+# =====================================================
+# ESTILO SIN FONDO
+# =====================================================
 
 st.markdown(
 """
 <style>
 
-.stApp {
-
-background-color: #F5F7FA;
-
-}
-
-
-h1, h2, h3 {
-
-color:#0B1F33;
-
-}
-
-
-[data-testid="metric-container"] {
-
+.stApp{
 background-color:white;
+}
+
+
+h1,h2,h3,h4{
+color:#0B1F33;
+font-family:Arial;
+}
+
+
+[data-testid="metric-container"]{
+
+background-color:#F7F9FC;
+
+border-radius:10px;
 
 padding:15px;
 
-border-radius:12px;
-
-box-shadow:0px 2px 8px #cccccc;
-
-}
-
-
-div[data-testid="stDataFrame"] {
-
-background:white;
+border:1px solid #D9E2F3;
 
 }
 
 
 </style>
+
 """,
 unsafe_allow_html=True
 )
 
 
 
-# =========================================================
-# CARGA DE DATA
-# =========================================================
+# =====================================================
+# TITULO
+# =====================================================
+
+
+st.title(
+"⚡ Sistema de Control de Pérdidas - Alimentador A4351"
+)
+
+
+st.write(
+"Análisis de consumo, anomalías y energía dejada de consumir basado en últimos 12 meses"
+)
+
+
+
+# =====================================================
+# CARGA EXCEL
+# =====================================================
+
 
 archivo = "CONSUMO A4351 2 AÑOS.xlsx"
 
 
-df = pd.read_excel(archivo)
+df = pd.read_excel(
+    archivo
+)
 
 
 
-# limpieza columnas
+# limpiar nombres
 
 df.columns = (
     df.columns
@@ -108,7 +119,7 @@ for m in meses:
 
 
 
-# eliminar registros vacíos
+# quitar vacíos
 
 df = df.dropna(
     subset=[col_suministro]
@@ -116,12 +127,15 @@ df = df.dropna(
 
 
 
-# =========================================================
-# ÚLTIMOS 12 MESES
-# =========================================================
+# =====================================================
+# ULTIMOS 12 MESES
+# =====================================================
 
 
-meses_12 = list(meses[-12:])
+meses_12 = list(
+    meses[-12:]
+)
+
 
 
 df["Promedio_12M"] = (
@@ -143,15 +157,17 @@ df["Mes_Anterior"] = (
 
 
 
-# =========================================================
-# VARIACIÓN %
-# =========================================================
+# =====================================================
+# VARIACION %
+# =====================================================
 
 
 df["Diferencia_kWh"] = (
 
     df["Ultimo_Mes"]
+
     -
+
     df["Mes_Anterior"]
 
 )
@@ -181,18 +197,18 @@ df["Tipo_Cambio"] = np.where(
 
     df["Diferencia_kWh"] < 0,
 
-    "Caída",
+    "Caída de consumo",
 
-    "Incremento"
+    "Incremento de consumo"
 
 )
 
 
 
-# =========================================================
-# ENERGÍA PERDIDA
-# COMPARACIÓN CONTRA PROMEDIO 12 MESES
-# =========================================================
+# =====================================================
+# ENERGIA PERDIDA
+# CONTRA PROMEDIO 12 MESES
+# =====================================================
 
 
 df["Energia_Esperada"] = (
@@ -215,9 +231,9 @@ df["Energia_Perdida_kWh"] = np.where(
 
 
 
-# =========================================================
-# CLASIFICACIÓN
-# =========================================================
+# =====================================================
+# CLASIFICACION
+# =====================================================
 
 
 def clasificar(row):
@@ -235,38 +251,33 @@ def clasificar(row):
         return "⚫ Consumo Cero 12 meses"
 
 
-
     elif consumo6 == 0:
 
         return "🟣 Aviso Consumo 6 meses"
 
 
-
     elif (
-        row["Tipo_Cambio"]=="Caída"
+        row["Tipo_Cambio"]=="Caída de consumo"
         and row["Variacion_%"]>40
     ):
 
         return "🔴 Caída Crítica"
 
 
-
     elif (
-        row["Tipo_Cambio"]=="Caída"
+        row["Tipo_Cambio"]=="Caída de consumo"
         and row["Variacion_%"]>20
     ):
 
         return "🟠 Caída Consumo"
 
 
-
     elif (
-        row["Tipo_Cambio"]=="Incremento"
+        row["Tipo_Cambio"]=="Incremento de consumo"
         and row["Variacion_%"]>50
     ):
 
         return "🔵 Incremento Alto"
-
 
 
     else:
@@ -282,13 +293,12 @@ df["Estado"] = df.apply(
 
 
 
-# =========================================================
-# FUNCIONES DE UNIDADES
-# =========================================================
+# =====================================================
+# FORMATO ENERGIA
+# =====================================================
 
 
-def formato_energia(valor):
-
+def energia(valor):
 
     if valor >= 1000000:
 
@@ -301,28 +311,15 @@ def formato_energia(valor):
         return (
             f"{valor:,.0f} kWh"
         )
-
-
-
-# =========================================================
-# TÍTULO
-# =========================================================
-
-
-st.title(
-"⚡ Sistema de Control de Pérdidas - Alimentador A4351"
-)
-
-
-st.caption(
-"Análisis automático de consumos, pérdidas energéticas y anomalías de suministro - Últimos 12 meses"
-)
-
-
-
-# =========================================================
+        # =====================================================
 # KPI GERENCIALES
-# =========================================================
+# =====================================================
+
+
+st.subheader(
+    "📊 Indicadores Gerenciales de Control de Pérdidas"
+)
+
 
 
 energia_perdida_total = (
@@ -332,87 +329,167 @@ energia_perdida_total = (
 
 
 
-caidas = len(
-    df[
-    df["Estado"]=="🔴 Caída Crítica"
-    ]
-)
-
-
-
-cero = len(
-    df[
-    df["Estado"]=="⚫ Consumo Cero 12 meses"
-    ]
-)
-
-
-
-avisos = len(
-    df[
-    df["Estado"]=="🟣 Aviso Consumo 6 meses"
-    ]
-)
-
-
-
-consumo_total_actual = (
+consumo_actual_total = (
     df["Ultimo_Mes"]
     .sum()
 )
 
 
 
-a,b,c,d,e = st.columns(5)
+consumo_promedio_total = (
+    df["Promedio_12M"]
+    .sum()
+)
+
+
+
+porcentaje_caida_global = (
+
+    abs(
+        (consumo_actual_total -
+         consumo_promedio_total)
+
+        /
+
+        consumo_promedio_total
+    )
+
+    *100
+
+)
+
+
+
+criticos = len(
+    df[
+        df["Estado"]=="🔴 Caída Crítica"
+    ]
+)
+
+
+
+consumo_cero = len(
+    df[
+        df["Estado"]=="⚫ Consumo Cero 12 meses"
+    ]
+)
+
+
+
+inspeccion = len(
+    df[
+        df["Estado"]=="🟣 Aviso Consumo 6 meses"
+    ]
+)
+
+
+
+a,b,c,d,e,f = st.columns(6)
+
 
 
 a.metric(
-"📌 Suministros",
-len(df)
+    "📌 Suministros",
+    len(df)
 )
+
 
 
 b.metric(
-"🔴 Caídas críticas",
-caidas
+    "🔴 Caídas críticas",
+    criticos
 )
+
 
 
 c.metric(
-"⚫ Consumo cero",
-cero
+    "⚫ Consumo cero 12M",
+    consumo_cero
 )
+
 
 
 d.metric(
-"🟣 Inspección",
-avisos
+    "🟣 Inspección",
+    inspeccion
 )
+
 
 
 e.metric(
-"⚡ Energía perdida",
-formato_energia(
-energia_perdida_total
+    "⚡ Energía perdida",
+    energia(energia_perdida_total)
 )
+
+
+
+f.metric(
+    "📉 Caída global",
+    f"{porcentaje_caida_global:.1f}%"
 )
-# =========================================================
-# TENDENCIA ALIMENTADOR A4351
-# SUMA TOTAL DE TODOS LOS SUMINISTROS
-# =========================================================
+
+
+
+
+
+# =====================================================
+# TABLA DE SUMINISTROS OBSERVADOS
+# =====================================================
+
 
 st.subheader(
-"📈 Tendencia Global del Alimentador A4351"
+    "🚨 Suministros Observados"
 )
+
+
+
+observados = df[
+    df["Estado"]!="🟢 Consumo Normal"
+]
+
+
+
+st.dataframe(
+
+    observados[
+        [
+        col_suministro,
+        "Ultimo_Mes",
+        "Promedio_12M",
+        "Variacion_%",
+        "Energia_Perdida_kWh",
+        "Tipo_Cambio",
+        "Estado"
+        ]
+    ],
+
+    use_container_width=True
+
+)
+
+
+
+
+
+# =====================================================
+# TENDENCIA DEL ALIMENTADOR A4351
+# SUMA TOTAL MENSUAL
+# =====================================================
+
+
+st.subheader(
+    "📈 Tendencia del Alimentador A4351 - Últimos 12 meses"
+)
+
 
 
 tendencia = pd.DataFrame()
 
 
+
 tendencia["Mes"] = meses_12
 
 
-# suma de todos los suministros por mes
 
 tendencia["Consumo_kWh"] = [
 
@@ -424,27 +501,14 @@ tendencia["Consumo_kWh"] = [
 
 
 
-# conversión unidad
-
-def convertir_unidad(valor):
-
-    if valor >= 1000000:
-
-        return f"{valor/1000000:.2f} GWh"
-
-    else:
-
-        return f"{valor:,.0f} kWh"
-
-
-
-tendencia["Unidad"] = tendencia["Consumo_kWh"].apply(
-    convertir_unidad
+tendencia["Consumo"] = (
+    tendencia["Consumo_kWh"]
+    .apply(energia)
 )
 
 
 
-# cálculo variación mensual
+# variación mensual
 
 tendencia["Variacion_%"] = (
 
@@ -458,7 +522,7 @@ tendencia["Variacion_%"] = (
 
 
 
-tendencia["Tipo"] = np.where(
+tendencia["Cambio"] = np.where(
 
     tendencia["Consumo_kWh"]
     <
@@ -479,9 +543,10 @@ st.dataframe(
 
 
 
-# =========================================================
-# GRÁFICO DISPERSIÓN ALIMENTADOR
-# =========================================================
+
+# =====================================================
+# GRAFICO TENDENCIA DISPERSION
+# =====================================================
 
 
 fig_tendencia = go.Figure()
@@ -501,7 +566,7 @@ fig_tendencia.add_trace(
         name="Consumo A4351",
 
         marker=dict(
-            size=10
+            size=12
         )
 
     )
@@ -512,11 +577,12 @@ fig_tendencia.add_trace(
 
 fig_tendencia.update_layout(
 
-    title="Consumo mensual acumulado del Alimentador A4351",
+    title=
+    "Comportamiento energético del Alimentador A4351",
 
     xaxis_title="Mes",
 
-    yaxis_title="Consumo",
+    yaxis_title="kWh",
 
     height=500
 
@@ -525,25 +591,29 @@ fig_tendencia.update_layout(
 
 
 st.plotly_chart(
+
     fig_tendencia,
+
     use_container_width=True
+
 )
 
 
 
 
-# =========================================================
-# VARIACIÓN MENSUAL %
-# =========================================================
+
+# =====================================================
+# VARIACION MENSUAL ALIMENTADOR
+# =====================================================
 
 
 st.subheader(
-"📉 Variación mensual del Alimentador"
+    "📉 Variación mensual del Alimentador"
 )
 
 
 
-fig_var = px.bar(
+fig_variacion = px.bar(
 
     tendencia,
 
@@ -551,51 +621,64 @@ fig_var = px.bar(
 
     y="Variacion_%",
 
-    color="Tipo",
+    color="Cambio",
 
-    title="Variación porcentual mensual"
+    text="Variacion_%",
+
+    title="Variación porcentual mensual A4351"
 
 )
 
 
-fig_var.update_layout(
-height=400
+
+fig_variacion.update_traces(
+texttemplate="%{text:.1f}%"
 )
+
+
+
+fig_variacion.update_layout(
+height=450
+)
+
 
 
 st.plotly_chart(
-fig_var,
-use_container_width=True
+
+    fig_variacion,
+
+    use_container_width=True
+
 )
 
 
 
 
 
-# =========================================================
-# TOP 100 SUMINISTROS CRÍTICOS
-# =========================================================
+# =====================================================
+# TOP 100 SUMINISTROS POR ENERGIA PERDIDA
+# =====================================================
 
 
 st.subheader(
-"🔴 Top 100 Suministros con Mayor Impacto"
+"🔴 Top 100 Suministros con Mayor Energía No Consumida"
 )
 
 
 
 top100 = (
 
-df
+    df
 
-.sort_values(
+    .sort_values(
 
-"Energia_Perdida_kWh",
+        "Energia_Perdida_kWh",
 
-ascending=False
+        ascending=False
 
-)
+    )
 
-.head(100)
+    .head(100)
 
 )
 
@@ -603,27 +686,18 @@ ascending=False
 
 st.dataframe(
 
-top100[
+    top100[
+        [
+        col_suministro,
+        "Promedio_12M",
+        "Ultimo_Mes",
+        "Energia_Perdida_kWh",
+        "Variacion_%",
+        "Estado"
+        ]
+    ],
 
-[
-
-col_suministro,
-
-"Ultimo_Mes",
-
-"Promedio_12M",
-
-"Energia_Perdida_kWh",
-
-"Variacion_%",
-
-"Estado"
-
-]
-
-],
-
-use_container_width=True
+    use_container_width=True
 
 )
 
@@ -631,23 +705,26 @@ use_container_width=True
 
 # gráfico top 20
 
+
 top20 = top100.head(20)
 
 
 
 fig_top = px.bar(
 
-top20,
+    top20,
 
-x=col_suministro,
+    x=col_suministro,
 
-y="Energia_Perdida_kWh",
+    y="Energia_Perdida_kWh",
 
-color="Estado",
+    color="Estado",
 
-title="Top 20 suministros con mayor energía dejada de consumir"
+    title=
+    "Top 20 suministros con mayor energía perdida"
 
 )
+
 
 
 fig_top.update_layout(
@@ -658,238 +735,109 @@ height=500
 
 st.plotly_chart(
 
-fig_top,
+    fig_top,
 
-use_container_width=True
-
-)
-
-
-
-
-# =========================================================
-# PARETO DE PÉRDIDAS
-# =========================================================
-
-
-st.subheader(
-"📊 Pareto 80/20 de Energía Perdida"
-)
-
-
-
-pareto = (
-
-df
-
-.sort_values(
-
-"Energia_Perdida_kWh",
-
-ascending=False
+    use_container_width=True
 
 )
+# ==============================
+# PARTE 3: KPIs AVANZADOS + ANÁLISIS DE PÉRDIDAS + GWH
+# ==============================
 
-)
+import pandas as pd
+import numpy as np
+import streamlit as st
+import matplotlib.pyplot as plt
 
+st.header("📊 Análisis Avanzado de Energía y Pérdidas")
 
+# ------------------------------
+# 1. PREPARACIÓN DE DATOS
+# ------------------------------
+df["Fecha"] = pd.to_datetime(df["Fecha"])
 
-pareto["Acumulado_%"]=(
+# Ajusta el nombre de tu columna de consumo si es diferente
+col_consumo = [c for c in df.columns if "kwh" in c.lower()][0]
 
-pareto["Energia_Perdida_kWh"]
-.cumsum()
+df = df.sort_values("Fecha")
 
-/
+# Agrupar por mes
+df["Mes"] = df["Fecha"].dt.to_period("M").astype(str)
+consumo_mensual = df.groupby("Mes")[col_consumo].sum().reset_index()
 
-pareto["Energia_Perdida_kWh"]
-.sum()
+# Convertir kWh a GWh
+consumo_mensual["GWh"] = consumo_mensual[col_consumo] / 1_000_000
 
-*
+# ------------------------------
+# 2. KPI PRINCIPAL
+# ------------------------------
+total_kwh = df[col_consumo].sum()
+total_gwh = total_kwh / 1_000_000
 
-100
+st.subheader("⚡ KPIs Generales")
 
-)
+col1, col2, col3 = st.columns(3)
 
+col1.metric("Consumo Total (kWh)", f"{total_kwh:,.0f}")
+col2.metric("Consumo Total (GWh)", f"{total_gwh:.2f}")
+col3.metric("Meses analizados", df["Mes"].nunique())
 
+# ------------------------------
+# 3. ESTIMACIÓN DE PÉRDIDAS
+# ------------------------------
+# Supuesto: pérdidas técnicas promedio 8% (ajustable)
+perdida_pct = 0.08
 
-fig_pareto = go.Figure()
+df["Perdida_kWh"] = df[col_consumo] * perdida_pct
 
+total_perdidas_kwh = df["Perdida_kWh"].sum()
+total_perdidas_gwh = total_perdidas_kwh / 1_000_000
 
+st.subheader("⚠️ Pérdidas de Energía Estimadas")
 
-fig_pareto.add_trace(
+col4, col5 = st.columns(2)
 
-go.Bar(
+col4.metric("Pérdidas (kWh)", f"{total_perdidas_kwh:,.0f}")
+col5.metric("Pérdidas (GWh)", f"{total_perdidas_gwh:.2f}")
 
-x=pareto.head(50)[col_suministro],
+# ------------------------------
+# 4. TENDENCIA MENSUAL EN GWh
+# ------------------------------
+st.subheader("📈 Tendencia mensual de consumo (GWh)")
 
-y=pareto.head(50)["Energia_Perdida_kWh"],
+fig, ax = plt.subplots()
+ax.plot(consumo_mensual["Mes"], consumo_mensual["GWh"], marker="o")
+ax.set_title("Consumo energético mensual")
+ax.set_xlabel("Mes")
+ax.set_ylabel("GWh")
+plt.xticks(rotation=45)
 
-name="kWh perdido"
+st.pyplot(fig)
 
-)
+# ------------------------------
+# 5. CAÍDA O VARIACIÓN DE CONSUMO
+# ------------------------------
+consumo_mensual["Variacion_%"] = consumo_mensual["GWh"].pct_change() * 100
 
-)
+caida_total = consumo_mensual["GWh"].iloc[-1] - consumo_mensual["GWh"].iloc[0]
 
+st.subheader("📉 Variación de consumo")
 
+st.metric("Cambio total (GWh)", f"{caida_total:.2f}")
 
-fig_pareto.add_trace(
+# ------------------------------
+# 6. EXPORTAR RESULTADOS
+# ------------------------------
+st.subheader("⬇️ Exportar datos")
 
-go.Scatter(
+export = consumo_mensual.copy()
+export["Perdidas_GWh"] = export["GWh"] * perdida_pct
 
-x=pareto.head(50)[col_suministro],
+csv = export.to_csv(index=False).encode("utf-8")
 
-y=pareto.head(50)["Acumulado_%"],
-
-mode="lines+markers",
-
-name="Acumulado %"
-
-)
-
-)
-
-
-
-fig_pareto.update_layout(
-
-title="Pareto principales pérdidas",
-
-height=500
-
-)
-
-
-
-st.plotly_chart(
-
-fig_pareto,
-
-use_container_width=True
-
-)
-
-
-
-
-# =========================================================
-# ANÁLISIS INDIVIDUAL
-# =========================================================
-
-
-st.subheader(
-"🔎 Análisis Individual del Suministro"
-)
-
-
-
-suministro = st.selectbox(
-
-"Seleccione suministro",
-
-df[col_suministro].astype(str)
-
-)
-
-
-
-dato = df[
-
-df[col_suministro].astype(str)
-
-==
-
-suministro
-
-].iloc[0]
-
-
-
-grafico12 = pd.DataFrame({
-
-"Mes":meses_12,
-
-"Consumo":[
-
-dato[m]
-
-for m in meses_12
-
-]
-
-})
-
-
-
-fig_individual = go.Figure()
-
-
-
-fig_individual.add_trace(
-
-go.Bar(
-
-x=grafico12["Mes"],
-
-y=grafico12["Consumo"],
-
-name="Consumo mensual"
-
-)
-
-)
-
-
-
-fig_individual.add_trace(
-
-go.Scatter(
-
-x=grafico12["Mes"],
-
-y=[dato["Promedio_12M"]]*12,
-
-mode="lines",
-
-name="Promedio 12 meses"
-
-)
-
-)
-
-
-
-fig_individual.update_layout(
-
-title=f"Tendencia suministro {suministro}",
-
-height=500
-
-)
-
-
-
-st.plotly_chart(
-
-fig_individual,
-
-use_container_width=True
-
-)
-
-
-
-# =========================================================
-# EXPORTACIÓN
-# =========================================================
-
-
-st.subheader(
-"📤 Exportar análisis"
-)
-
-
-
-excel = df.to_excel(
-index=False,
-engine="openpyxl"
+st.download_button(
+    label="Descargar análisis en CSV",
+    data=csv,
+    file_name="analisis_energia.csv",
+    mime="text/csv"
 )
